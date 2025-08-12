@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  STYLIST
+  ADMIN
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CANCELED
+  COMPLETED
+  NO_SHOW
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?  @db.VarChar(30)
+  name         String
+  passwordHash String
+  role         Role     @default(CLIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stylist      Stylist?
+  appointments Appointment[] @relation("UserAppointments")
+}
+
+model Stylist {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  bio       String? 
+  tz        String   @default("America/New_York")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id])
+  services      StylistService[]
+  availability  AvailabilityRule[]
+  timeOff       TimeOff[]
+  appointments  Appointment[] @relation("StylistAppointments")
+}
+
+model Service {
+  id          String  @id @default(cuid())
+  name        String
+  durationMin Int
+  priceCents  Int
+  bufferMin   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stylists StylistService[]
+  appointments Appointment[]
+}
+
+model StylistService {
+  stylistId String
+  serviceId String
+  @@id([stylistId, serviceId])
+
+  stylist Stylist @relation(fields: [stylistId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+}
+
+model AvailabilityRule {
+  id        String   @id @default(cuid())
+  stylistId String
+  weekday   Int      // 0=Sun .. 6=Sat
+  startTime String   // "09:00"
+  endTime   String   // "17:00"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stylist Stylist @relation(fields: [stylistId], references: [id])
+}
+
+model TimeOff {
+  id        String   @id @default(cuid())
+  stylistId String
+  start     DateTime
+  end       DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stylist Stylist @relation(fields: [stylistId], references: [id])
+}
+
+model Appointment {
+  id         String            @id @default(cuid())
+  clientId   String
+  stylistId  String
+  serviceId  String
+  start      DateTime
+  end        DateTime
+  status     AppointmentStatus @default(BOOKED)
+  notes      String?
+  source     String?           // "web", "sms", etc.
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  client  User    @relation("UserAppointments", fields: [clientId], references: [id])
+  stylist Stylist @relation("StylistAppointments", fields: [stylistId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@index([stylistId, start, end])
+}
